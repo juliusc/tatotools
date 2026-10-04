@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}GT Helper{% endblock %}
+
+{% block content %}
+<style>
+    #controls {
+        margin-top: 20px;
+    }
+    .clickable-item {
+        padding: 12px 15px;
+        margin-bottom: 10px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.1s ease;
+        background-color: #fff;
+    }
+    .clickable-item:hover {
+        background-color: #e9ecef;
+        border-color: #3498db;
+        transform: translateX(5px);
+    }
+    .clickable-item.selected {
+        background-color: #3498db;;
+        color: white;
+    }
+    .budget-text {
+        display: block; margin-bottom: 8px; font-weight: bold; color: #333;
+    }
+    .text-input {
+        width: 100%;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        background-color: #fff;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        box-sizing: border-box;
+    }
+    .text-input:hover {
+        border-color: #007bff;
+    }
+    .text-input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    }
+</style>
+
+<div class="content">
+    <h2>Production plan</h2>
+    <div>
+        <label class="budget-text">Budget:</label>
+        <input type="text" class="text-input" id="budget-value" name="budget" value="">
+
+        <label class="duration-text">Duration (hours):</label>
+        <input type="text" class="text-input" id="duration-value" name="duration" value="12">
+
+        <label class="consum-duration-text">Minimum consumables duration if needed (hours):</label>
+        <input type="text" class="text-input" id="consumables-duration-value" name="consumables-duration" value="24">
+
+        <label class="max-weight-text">Max weight</label>
+        <input type="text" class="text-input" id="max-weight-value" name="max-weight" value="">
+
+        <label for="include-consumables">
+            <input type="checkbox" id="include-consumables" checked>
+            Include consumables
+        </label>
+        <!-- <label for="include-exchange">
+            <input type="checkbox" id="include-exchange" checked>
+            Include exchange
+        </label>
+        <label for="only-outputs-sellable">
+            <input type="checkbox" id="only-outputs-sellable" checked>
+            Only outputs are sellable 
+        </label> -->
+
+    </div>
+    <h3>Bases</h3>
+    <div id="controls"></div>
+    
+    <div><button id="submitButton" class="actionButton">Submit</button></div>
+    <!-- <div><button id="submitNoImportsButton" class="actionButton">Submit (no imports)</button></div> -->
+
+</div>
+
+<div class="content", id="result">
+    <div id="thinking" class="thinking" display="none"></div>
+    <div id="result">
+        <h2>Purchases</h2>
+        <button id="wishlistButton" class="actionButton">Upload wishlist</button>    
+        <table id="purchases-table"></table>
+        <table id="orders-table"></table>
+        <table id="duration-table"></table>
+        <table id="mats-table"></table>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/2.3.6/css/dataTables.dataTables.css" />
+<script src="https://cdn.datatables.net/2.3.6/js/dataTables.js"></script>
+
+<script>
+    let wishlist;
+    let base_id;
+
+    let plan = function(data) {
+        $.ajax({
+                url: '/compute-plan',
+                method: 'GET',
+                traditional: true,
+                // data: {id: selectedIds,
+                //        budget: $("#budget-value").val(),
+                //        duration: $("#duration-value").val(),
+                //        consumables_duration: $("#consumables-duration-value").val(),
+                //        include_consumables: $("#include-consumables").prop("checked")},
+                data: data,
+                success: function(response) {
+                    $('#thinking').hide()
+                    $('#result').show()
+                    let populate = function(data, table_id, columns) {
+                        let table = '<thead><tr>';
+                        columns.forEach(key => {
+                            table += `<th>${key}</th>`;
+                        });
+                        table += '</tr></thead><tbody>';
+                        
+                        data.forEach(row => {
+                            table += '<tr>';
+                            Object.values(row).forEach(value => {
+                            table += `<td>${value}</td>`;
+                            });
+                            table += '</tr>';
+                        });
+                        table += '</tbody>';
+                        $(table_id).html(table)        
+                    }
+                    wishlist = response["Wishlist"]
+                    populate(response["Purchases"], "#purchases-table", ["Material", "To Purchase", "Cost", "Weight"])
+                    populate(response["Materials"], "#mats-table", ["Material", "At Base Warehouse", "From Exchange Warehouse", "Purchase", "Final"])
+                    populate(response["Orders"], "#orders-table", ["Building", "Recipe", "Num orders"])
+                    populate(response["Duration"], "#duration-table", ["Building", "Hours"])
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error calling /consumables:', error);
+                }
+            });
+    }
+
+    $(document).ready(function() {
+        // Make AJAX request to Flask server
+        $.ajax({
+            url: '/fetch-bases',
+            method: 'GET',
+            dataType: 'json',
+            success: function(data) {
+                $('#thinking').hide()
+                // Clear loading message
+                $('#controls').empty();
+                // Create checkboxes for each name
+                data.forEach(function(base, index) {
+                    // Escape HTML to prevent XSS
+                    var escapedName = $('<div>').text(base[0]).html();
+                    
+                    // Create clickable div element
+                    var baseSelect = $('<div>', {
+                        class: 'clickable-item',
+                        id: base[1],
+                        text: escapedName,
+                        'data-value': escapedName
+                    });
+
+                    baseSelect.click(function() {
+                        $(".clickable-item").removeClass('selected')
+                        $(this).toggleClass('selected');                        
+                    });
+                        
+                    // Add to controls div
+                    $('#controls').append(baseSelect);
+                });
+            },
+            error: function(xhr, status, error) {
+                // Handle errors
+                $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
+                console.error('AJAX Error:', status, error);
+            }
+        });
+        $('#result-table').dataTable({searching: false, paging: false, info: false})
+        $("#submitButton").click(function () {
+            var selectedIds = [];
+            $('.clickable-item.selected').each(function() {
+                selectedIds.push($(this).attr('id'));
+            });
+            $('#thinking').show()
+            data = {id: selectedIds,
+                    budget: $("#budget-value").val(),
+                    duration: $("#duration-value").val(),
+                    consumables_duration: $("#consumables-duration-value").val(),
+                    max_weight: $("#max-weight-value").val(),
+                    include_consumables: $("#include-consumables").prop("checked"),
+                    include_exchange: $("#include-exchange").prop("checked"),
+                    only_outputs_sellable: $("#only-outputs-sellable").prop("checked")}
+            plan(data)
+        });
+        $("#submitNoImportsButton").click(function () {
+            var selectedIds = [];
+            $('.clickable-item.selected').each(function() {
+                selectedIds.push($(this).attr('id'));
+            });
+            $('#thinking').show()
+            data = {id: selectedIds,
+                    budget: 0,
+                    duration: $("#duration-value").val(),
+                    consumables_duration: 0,
+                    max_weight: $("#max-weight-value").val(),
+                    include_consumables: false,
+                    include_exchange: $("#include-exchange").prop("checked"),
+                    only_outputs_sellable: $("#only-outputs-sellable").prop("checked")}
+            plan(data)
+            base_id = selectedIds[0]
+        });
+        $("#wishlistButton").click(function () {
+            var selectedIds = [];
+            $('.clickable-item.selected').each(function() {
+                selectedIds.push($(this).attr('id'));
+            });
+
+            $.ajax({
+                url: '/wishlist-add',
+                method: 'POST',
+                contentType: "application/json",
+                data: JSON.stringify({"base_id": selectedIds[0], "wishlist": wishlist}),
+                success: function(response) {
+                },
+                error: function(xhr, status, error) {
+                }
+            });
+        });
+  
+    $('#purchases-table').dataTable({searching: false, paging: false, info: false})
+    $('#orders-table').dataTable({searching: false, paging: false, info: false})
+    $('#mats-table').dataTable({searching: false, paging: false, info: false})
+    $('#duration-table').dataTable({searching: false, paging: false, info: false})
+
+    });
+
+</script>
+
+{% endblock %}
