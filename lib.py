@@ -69,13 +69,15 @@ def load_warehouses_data(min_time=180):
     fetch_api_data_if_needed(f"{API_BASE_URL}/company/warehouses?apikey={API_KEY}", WAREHOUSES_FILENAME, min_time)
     return dict((wh_data["id"], wh_data) for wh_data in json.load(open(WAREHOUSES_FILENAME)))
 
-def load_prices_dict():
+def load_prices_dict(min_time=180):
+    fetch_api_data_if_needed(f"{API_BASE_URL}/exchange/mat-prices?apikey={API_KEY}", PRICES_FILENAME, min_time)
     result = {}
     for data in json.load(open(PRICES_FILENAME))["prices"]:
         result[data["matId"]] = data
     return result
 
-def load_prices_vec():
+def load_prices_vec(min_time=180):
+    fetch_api_data_if_needed(f"{API_BASE_URL}/exchange/mat-prices?apikey={API_KEY}", PRICES_FILENAME, min_time)
     v = np.zeros(MAT_VECTOR_SIZE)
     for data in json.load(open(PRICES_FILENAME))["prices"]:
         cur_price = data["currentPrice"]
