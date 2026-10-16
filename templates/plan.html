@@ -1,31 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}GT Helper{% endblock %}
+{% block title %}TatoTools{% endblock %}
 
 {% block content %}
 <style>
     #controls {
         margin-top: 20px;
     }
-    .clickable-item {
-        padding: 12px 15px;
-        margin-bottom: 10px;
-        border: 2px solid #ddd;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.1s ease;
-        background-color: #fff;
-    }
-    .clickable-item:hover {
-        background-color: #e9ecef;
-        border-color: #3498db;
-        transform: translateX(5px);
-    }
-    .clickable-item.selected {
-        background-color: #3498db;;
-        color: white;
-    }
-    .budget-text {
+    .days-text {
         display: block; margin-bottom: 8px; font-weight: bold; color: #333;
     }
     .text-input {
@@ -49,200 +31,311 @@
     }
 </style>
 
+<div id="msg-error" class="msg-error"></div>
+
 <div class="content">
-    <h2>Production plan</h2>
-    <div>
-        <label class="budget-text">Budget:</label>
-        <input type="text" class="text-input" id="budget-value" name="budget" value="">
-
-        <label class="duration-text">Duration (hours):</label>
-        <input type="text" class="text-input" id="duration-value" name="duration" value="12">
-
-        <label class="consum-duration-text">Minimum consumables duration if needed (hours):</label>
-        <input type="text" class="text-input" id="consumables-duration-value" name="consumables-duration" value="24">
-
-        <label class="max-weight-text">Max weight</label>
-        <input type="text" class="text-input" id="max-weight-value" name="max-weight" value="">
-
-        <label for="include-consumables">
-            <input type="checkbox" id="include-consumables" checked>
-            Include consumables
-        </label>
-        <!-- <label for="include-exchange">
-            <input type="checkbox" id="include-exchange" checked>
-            Include exchange
-        </label>
-        <label for="only-outputs-sellable">
-            <input type="checkbox" id="only-outputs-sellable" checked>
-            Only outputs are sellable 
-        </label> -->
-
+    <h2>
+        Base selection
+        <div class="help-badge">?
+            <div class="help-tooltip">
+                Click or drag to select bases to plan wishlists for.
+            </div>
+        </div>
+    </h2>
+    <div id="thinking-fetch-bases", class="thinking">        
+        <div class="thinking-icon"></div>        
+        Fetching base data...     
     </div>
-    <h3>Bases</h3>
-    <div id="controls"></div>
-    
-    <div><button id="submitButton" class="actionButton">Submit</button></div>
-    <!-- <div><button id="submitNoImportsButton" class="actionButton">Submit (no imports)</button></div> -->
+    <div id="result" style="display:none">
+        <table id="result-table">
+            <thead><tr>
+                <th>Name</th>
+                <th>Time until production slowdown<div class="help-badge">?<div class="help-tooltip">Time until either any consumable runs out or production is halted.</div></div></th>
+                <th>Consumable hours<div class="help-badge">?<div class="help-tooltip">Time until any consumable runs out.</div></div></th>
+                <th>Production hours<div class="help-badge">?<div class="help-tooltip">Time until production is halted based on existing orders.</div></div></th>
+                <th>Production hours (max)<div class="help-badge">?<div class="help-tooltip">Maximum time production possible based on current supplies.</div></div></th>
+            </tr></thead>
+            <tbody>
+        </table>
+    </div>
+</div>
+
+<div class="content">
+    <h2>Plan settings</h2>
+    <label id="budget-text">Budget:
+        <div class="help-badge">?<div class="help-tooltip">
+            Maximum budget. Leave empty for unlimited budget.
+        </div></div>
+    </label>
+    <input type="text" class="text-input" id="budget-value" name="budget" value="" placeholder="unlimited">
+
+    <label id="duration-text">Production duration (hours):
+        <div class="help-badge">?<div class="help-tooltip">
+            Plan for production for this duration. Required field.
+        </div></div>
+    </label>
+    <input type="text" class="text-input" id="duration-value" name="duration" value="24">
+
+    <label id="consum-duration-text">Consumables duration (hours):
+        <div class="help-badge">?<div class="help-tooltip">
+            Duration of consumables. If empty, the production duration is used.
+        </div></div>
+    </label>
+    <input type="text" class="text-input" id="consumables-duration-value" name="consumables-duration" value="">
+
+    <label id="max-weight-text">Max weight
+        <div class="help-badge">?<div class="help-tooltip">
+            Maximum weight of inputs to ship. Leave empty for unlimited weight.
+        </div></div>
+    </label>
+    <input type="text" class="text-input" id="max-weight-value" name="max-weight" value="" placeholder="unlimited">
+
+    <label id="only-outputs-sellable-text">
+        <input type="checkbox" id="only-outputs-sellable" unchecked>
+        Disable selling inputs
+        <div class="help-badge">?<div class="help-tooltip">
+            If checked, the algorithm only permits selling output products, which encourages the algorithm to use up existing inputs. 
+            If unchecked, the algorithm may recommend selling existing inputs.
+        </div></div>
+    </label>
+    <!-- <br> -->
+    <!-- <label id="only-outputs-sellable">
+        <input type="checkbox" id="only-outputs-sellable" unchecked>
+        Disable buying outputs
+        <div class="help-badge">?<div class="help-tooltip">
+            If checked, any products that are the output of any owned production building cannot be bought.
+        </div></div>
+    </label> -->
 
 </div>
 
-<div class="content", id="result">
-    <div id="thinking" class="thinking" display="none"></div>
-    <div id="result">
-        <h2>Purchases</h2>
-        <button id="wishlistButton" class="actionButton">Upload wishlist</button>    
-        <table id="purchases-table"></table>
-        <table id="orders-table"></table>
-        <table id="duration-table"></table>
-        <table id="mats-table"></table>
-    </div>
+<div><button id="plan-button" class="action-button">Plan</button></div>
+
+<div id="thinking-plan", class="thinking" hidden>      
+    <div class="thinking-icon"></div>        
+    Computing production plan...     
 </div>
+
 
 <link rel="stylesheet" href="https://cdn.datatables.net/2.3.6/css/dataTables.dataTables.css" />
 <script src="https://cdn.datatables.net/2.3.6/js/dataTables.js"></script>
 
 <script>
-    let wishlist;
-    let base_id;
+    let test_var;
+  
+    // function renderMatName(name) {
+    //     assetName = name.split(" ").join("")
+    //     return <svg width="24" height="24" class="icon">
+    //         <use href="/static/assets.svg#AI"></use>
+    //         <!-- <use href="assets#AI"></use> -->
+    //     </svg>
+    // }
+    let dragging = false;
+    let dragEnables = true;
 
-    let plan = function(data) {
-        $.ajax({
-                url: '/compute-plan',
-                method: 'GET',
-                traditional: true,
-                // data: {id: selectedIds,
-                //        budget: $("#budget-value").val(),
-                //        duration: $("#duration-value").val(),
-                //        consumables_duration: $("#consumables-duration-value").val(),
-                //        include_consumables: $("#include-consumables").prop("checked")},
-                data: data,
-                success: function(response) {
-                    $('#thinking').hide()
-                    $('#result').show()
-                    let populate = function(data, table_id, columns) {
-                        let table = '<thead><tr>';
-                        columns.forEach(key => {
-                            table += `<th>${key}</th>`;
-                        });
-                        table += '</tr></thead><tbody>';
-                        
-                        data.forEach(row => {
-                            table += '<tr>';
-                            Object.values(row).forEach(value => {
-                            table += `<td>${value}</td>`;
-                            });
-                            table += '</tr>';
-                        });
-                        table += '</tbody>';
-                        $(table_id).html(table)        
-                    }
-                    wishlist = response["Wishlist"]
-                    populate(response["Purchases"], "#purchases-table", ["Material", "To Purchase", "Cost", "Weight"])
-                    populate(response["Materials"], "#mats-table", ["Material", "At Base Warehouse", "From Exchange Warehouse", "Purchase", "Final"])
-                    populate(response["Orders"], "#orders-table", ["Building", "Recipe", "Num orders"])
-                    populate(response["Duration"], "#duration-table", ["Building", "Hours"])
-                },
-                error: function(xhr, status, error) {
-                    console.error('Error calling /consumables:', error);
-                }
+    function setConsumablesDurationPlaceholder() {
+        $("#consumables-duration-value").attr("placeholder", $("#duration-value").val());
+    }
+
+    function modifyContent() {
+        console.log(this)
+        const $c = $(this);
+        if ($c.data('collapseInit')) return;
+        $c.data('collapseInit', true);
+
+        const $arrow = $('<button type="button" class="collapse-arrow" title="Collapse/expand">&#9654;</button>');
+        const $header = $c.children(':header').first();
+        const $body = $('<div class="content-body">');
+        const $inner = $('<div class="content-body-inner">');
+
+        if ($header.length) {
+            $header.prepend($arrow);
+            $header.nextAll().appendTo($inner);
+        } else {
+            $c.prepend($arrow);
+            $arrow.nextAll().appendTo($inner);
+        }
+        $body.append($inner);   // body always has exactly ONE child
+        $c.append($body);
+    };
+
+    function formatReport(report) {
+        // let report = localStorage.getItem("report");
+        // if (!report) {
+        //     return;
+        // }
+        $("#plan-output").remove();
+        $("body").append(`<div class="content" id="plan-output"><h2>Production Plan</h2></div>`)
+        for (const [base_id, base_data] of Object.entries(report.bases)) {
+            $("#plan-output").append(`<div class="content" id="report-${base_id}"><h3>${base_data["name"]}</h3></div>`)
+            $(`#report-${base_id}`).append(`<div class="content" id="orders-${base_id}"><h4>Orders</h4></div>`)
+            let table = `<table id=orders-${base_id}-table><thead><tr><th>Building</th><th>Recipe</th><th>Amount</th></tr></thead>`
+            base_data["orders"].forEach(row => {
+                table += `<tr>`;
+                table += "<td>" + row["building"] + "</td>"
+                table += "<td>" + row["recipe"] + "</td>"
+                table += "<td>" + row["amount"] + "</td>"
+                table += '</tr>';
             });
+            table += "</tbody></table>"
+            $(`#orders-${base_id}`).append(table)
+            $(`#orders-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
+            $(`#orders-${base_id}`).each(modifyContent)
+
+            $(`#report-${base_id}`).append(`<div class="content" id="mats-${base_id}"><h4>Inputs</h4></div>`)
+            table = `<table id=mats-${base_id}-table><thead><tr><th>Material</th><th>At Base</th><th>Needed</th></tr></thead>`
+            base_data["materials"].forEach(row => {
+                table += `<tr>`;
+                table += "<td>" + row["material"] + "</td>"
+                table += "<td>" + row["at_base"] + "</td>"
+                table += "<td>" + row["needed"] + "</td>"
+                table += '</tr>';
+            });
+            table += "</tbody></table>"
+            $(`#mats-${base_id}`).append(table)
+            $(`#mats-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
+            $(`#mats-${base_id}`).each(modifyContent)
+
+            $(`#report-${base_id}`).append(`<div class="content" id="time-${base_id}"><h4>Production duration</h4></div>`)
+            table = `<table id=time-${base_id}-table><thead><tr><th>Building</th><th>Duration</th></tr></thead>`
+            base_data["prod_times"].forEach(row => {
+                table += `<tr>`;
+                table += "<td>" + row["building"] + "</td>"
+                table += "<td>" + row["duration"] + "</td>"
+                table += '</tr>';
+            });
+            table += "</tbody></table>"
+            $(`#time-${base_id}`).append(table)
+            $(`#time-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
+            $(`#time-${base_id}`).each(modifyContent)
+
+            $(`#report-${base_id}`).each(modifyContent)
+        }
     }
 
     $(document).ready(function() {
-        // Make AJAX request to Flask server
+
         $.ajax({
-            url: '/fetch-bases',
+            url: '/fetch-supplies',
             method: 'GET',
             dataType: 'json',
-            success: function(data) {
-                $('#thinking').hide()
-                // Clear loading message
-                $('#controls').empty();
-                // Create checkboxes for each name
-                data.forEach(function(base, index) {
-                    // Escape HTML to prevent XSS
-                    var escapedName = $('<div>').text(base[0]).html();
-                    
-                    // Create clickable div element
-                    var baseSelect = $('<div>', {
-                        class: 'clickable-item',
-                        id: base[1],
-                        text: escapedName,
-                        'data-value': escapedName
-                    });
-
-                    baseSelect.click(function() {
-                        $(".clickable-item").removeClass('selected')
-                        $(this).toggleClass('selected');                        
-                    });
-                        
-                    // Add to controls div
-                    $('#controls').append(baseSelect);
+            headers: {'Gt-Api-Key': localStorage.getItem('apiKey')},
+            success: function(response) {
+                $('#thinking-fetch-bases').hide();
+                $('#result').show();
+                table = "";
+                // formatReport();
+                response.forEach(row => {
+                    table += `<tr class="clickable-item" base-id=${row["base_id"]}>`;
+                    table += "<td>" + row["name"] + "</td>"
+                    table += "<td>" + row["hrs_until_slowdown"] + "</td>"
+                    table += "<td>" + row["consumables_hrs"] + "</td>"
+                    table += "<td>" + row["prod_hrs_actual"] + "</td>"
+                    table += "<td>" + row["prod_hrs_max"] + "</td>"
+                    table += '</tr>';
                 });
+                table += '</tbody>';
+                $('#result-table').append(table)      
+                $('#result-table').dataTable({searching: false, paging: false, info: false, ordering: false})
+                
+                $('.clickable-item').on('mousedown', function(e) {
+                    if (e.buttons != 1) {
+                        return
+                    }
+                    e.preventDefault();                    // stop text selection while dragging
+                    dragging = true;
+                    dragEnables = !$(this).hasClass("tato-selected");
+                    $(this).toggleClass('tato-selected', dragEnables);
+                });
+
+                $('.clickable-item').on('mouseenter', function() {
+                    if (dragging) {
+                        $(this).toggleClass('tato-selected', dragEnables);
+                    }
+                });
+
+                $(document).on('mouseup', function() {
+                    dragging = false;                       // end the drag, wherever the mouse is
+                });
+
             },
             error: function(xhr, status, error) {
                 // Handle errors
                 $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
                 console.error('AJAX Error:', status, error);
+                if (error == "INTERNAL SERVER ERROR") {
+                    $("#msg-error").text("Internal server error")
+                    $('#thinking-fetch-bases').hide();
+                }
             }
         });
-        $('#result-table').dataTable({searching: false, paging: false, info: false})
-        $("#submitButton").click(function () {
-            var selectedIds = [];
-            $('.clickable-item.selected').each(function() {
-                selectedIds.push($(this).attr('id'));
-            });
-            $('#thinking').show()
-            data = {id: selectedIds,
-                    budget: $("#budget-value").val(),
-                    duration: $("#duration-value").val(),
-                    consumables_duration: $("#consumables-duration-value").val(),
-                    max_weight: $("#max-weight-value").val(),
-                    include_consumables: $("#include-consumables").prop("checked"),
-                    include_exchange: $("#include-exchange").prop("checked"),
-                    only_outputs_sellable: $("#only-outputs-sellable").prop("checked")}
-            plan(data)
-        });
-        $("#submitNoImportsButton").click(function () {
-            var selectedIds = [];
-            $('.clickable-item.selected').each(function() {
-                selectedIds.push($(this).attr('id'));
-            });
-            $('#thinking').show()
-            data = {id: selectedIds,
-                    budget: 0,
-                    duration: $("#duration-value").val(),
-                    consumables_duration: 0,
-                    max_weight: $("#max-weight-value").val(),
-                    include_consumables: false,
-                    include_exchange: $("#include-exchange").prop("checked"),
-                    only_outputs_sellable: $("#only-outputs-sellable").prop("checked")}
-            plan(data)
-            base_id = selectedIds[0]
-        });
-        $("#wishlistButton").click(function () {
-            var selectedIds = [];
-            $('.clickable-item.selected').each(function() {
-                selectedIds.push($(this).attr('id'));
-            });
 
-            $.ajax({
-                url: '/wishlist-add',
-                method: 'POST',
-                contentType: "application/json",
-                data: JSON.stringify({"base_id": selectedIds[0], "wishlist": wishlist}),
-                success: function(response) {
-                },
-                error: function(xhr, status, error) {
+
+        setConsumablesDurationPlaceholder()
+        $("#duration-value").on("keyup", function () {
+            setConsumablesDurationPlaceholder();
+        });
+
+        // Implement collapsible content sections
+        $('.content').each(modifyContent);
+
+        $(document).on('click', '.collapse-arrow', function() {
+            $(this).closest('.content').toggleClass('collapsed');
+        });
+
+    });
+
+    $("#plan-button").click(function () {
+        $('#thinking-plan').show()
+        var selected_base_ids = [];
+        $('.clickable-item.tato-selected').each(function() {
+            selected_base_ids.push($(this).attr('base-id'));
+        });
+        if (selected_base_ids.length == 0) {
+            $("#msg-error").text("Select at least one base")
+            return
+        } else {
+            $("#msg-error").text("")
+        }
+
+        data = {
+            base_ids: selected_base_ids,
+            budget: $("#budget-value").val(),
+            duration: $("#duration-value").val(),
+            consumables_duration: $("#consumables-duration-value").val(),
+            max_weight: $("#max-weight-value").val(),
+            // include_consumables: $("#include-consumables").prop("checked"),
+            // include_exchange: $("#include-exchange").prop("checked"),
+            // only_outputs_sellable: $("#only-outputs-sellable").prop("checked")
+        }
+        $.ajax({
+            url: '/compute-plan',
+            method: 'GET',
+            traditional: true,
+            headers: {'Gt-Api-Key': localStorage.getItem('apiKey')},
+            data: data,
+            success: function(response) {
+                $("#msg-error").text("")
+                $('#thinking-plan').hide()
+                $('#result').show()
+                // console.log(response)
+                localStorage.setItem("report", response.bases)
+                formatReport(response)
+            },
+            error: function(xhr, status, error) {
+                console.log(xhr, status, error)
+                if (xhr.status == 0) {
+                    $("#msg-error").text("Connection error.")
+                    $('#thinking-plan').hide();
+                } else if (xhr.status == 401) {
+                    $("#msg-error").text("You must be a member of ATS.")
+                    $('#thinking-plan').hide();
+                } else {
+                    $("#msg-error").text("Server error.")
+                    $('#thinking-plan').hide();
                 }
-            });
+            }
         });
-  
-    $('#purchases-table').dataTable({searching: false, paging: false, info: false})
-    $('#orders-table').dataTable({searching: false, paging: false, info: false})
-    $('#mats-table').dataTable({searching: false, paging: false, info: false})
-    $('#duration-table').dataTable({searching: false, paging: false, info: false})
-
     });
 
 </script>
