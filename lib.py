@@ -78,8 +78,8 @@ API_BASE_URL = "https://api.g2.galactictycoons.com/public"
 API_KEY = os.environ["GT_API_KEY"]
 
 
-DEBUG_MODE = True
-# DEBUG_MODE = False
+# DEBUG_MODE = True
+DEBUG_MODE = False
 CACHE_FILE = "cache.json"
 if Path(CACHE_FILE).exists():
     CACHE = json.load(open(CACHE_FILE))
@@ -259,15 +259,18 @@ def render_recipe_with_icon(recipe_id, link=False):
     return render_mat_with_icon(mat_id, link=link, name_override=get_recipe_name(recipe_id))
 
 
+def render_weight(weight):
+    return f"{weight:.2f}".rstrip("0").rstrip(".")
+
+
 def get_time_string(days):
     if days == float("inf"):
         return "inf"
-    days_int = int(days // 1)
-    hours_int = int((days % 1) * 24)
-    minutes_int = int((days % (1 / 24)) * 60)
-    # breakpoint()
+    total_minutes = int(round(days * 24 * 60))
+    days_int, rem = divmod(total_minutes, 24 * 60)
+    hours_int, minutes_int = divmod(rem, 60)
     return f"{days_int}d {hours_int}h {minutes_int}m"
-    # return f"{days_int}d {hours_int}h"
+
 
 def get_recipe_to_mats_matrix(include_research=True):
     m = np.zeros((RECIPE_VECTOR_SIZE, MAT_VECTOR_SIZE), dtype=int)
@@ -317,6 +320,7 @@ def get_recipe_time_vec(company_data, bases_data, include_research_and_perks=Tru
 
             time /= prod_multiplier
         v[recipe["id"]] = time
+    v[0] = 100000000
     return v
 
 
@@ -387,6 +391,7 @@ def get_building_to_recipe_matrix():
     m = np.zeros((BUILDING_VECTOR_SIZE, RECIPE_VECTOR_SIZE))
     for recipe in GAME_DATA["recipes"]:
         m[recipe["producedIn"]][recipe["id"]] = 1
+    m[0, 0] = 1
     return m
 
 
@@ -448,6 +453,19 @@ def get_current_prices_vec(exchange_data):
             vec[mat_id] = 0.000001
         else:
             vec[mat_id] = mat_data["currentPrice"]
+    vec[0] = 100000
     return vec
 
 
+def prepare_wishlist_additems_body(data):
+    # Data is a dict of (base_id, dict of (mat_id, amount))
+    result = []
+    for base_id, base_data in data.items():
+        mats = []
+        for mat_id, amt in base_data.items():
+            mats.append({"id": mat_id, "am": amt})
+        result.append({
+            "wishlistId": base_id,
+            "mats": mats
+        })
+    return result

@@ -9,25 +9,33 @@ import lib
 EPSILON = 1e-3
 
 
-def prepare_report(base_ids, plan_orders, company_data, bases_data, warehouses_data):
+def prepare_report(base_ids, plan_orders, consumables_duration, company_data, bases_data, warehouses_data):
     recipe_to_mats_matrix = lib.get_recipe_to_mats_matrix()
     building_to_recipe_matrix = lib.get_building_to_recipe_matrix()
     recipe_time_vec = lib.get_recipe_time_vec(company_data, bases_data)
+    weights_vec = lib.get_weight_vec()
+
     bases_warehouse_mat = lib.get_base_storage_matrix(base_ids, bases_data, warehouses_data)
     buildings_mat = lib.get_building_levels_matrix(base_ids, bases_data, prod_buildings_only=True)
     exchange_warehouse_vec = lib.get_warehouse_contents_vec(lib.get_exchange_warehouse_data(warehouses_data))
+    consumption_mat = lib.get_daily_consumption_matrix(base_ids, bases_data) * consumables_duration
 
     base_idxs_to_names = dict((idx, bases_data[base_ids[idx]]["name"]) for idx in range(len(base_ids)))
 
+    summary_purchases = defaultdict(int)
+    summary_purchase_costs = defaultdict(int)
+    summary_orders = defaultdict(int)
+    wishlist_data = defaultdict(dict)
     result = {
         "bases": {},
-        "summary": {"purchases": []}}
+        "summary": {"purchases": []},
+        "wishlist": {}
+    }
     for base_id in base_ids:
         result["bases"][base_id] = {
             "name": bases_data[base_id]["name"],
             "orders": [], "materials": [], "prod_times": []
         }
-
 
     for base_id_idx, recipe_id in zip(*np.where(plan_orders > 0)):
         result["bases"][base_ids[base_id_idx]]["orders"].append({
@@ -35,15 +43,22 @@ def prepare_report(base_ids, plan_orders, company_data, bases_data, warehouses_d
             "recipe": lib.render_recipe_with_icon(recipe_id),
             "amount": int(plan_orders[base_id_idx, recipe_id])
         })
+        summary_orders[lib.render_recipe_with_icon(recipe_id)] += int(plan_orders[base_id_idx, recipe_id])
 
-    items_needed_mat = -np.minimum(np.matmul(plan_orders, recipe_to_mats_matrix) + bases_warehouse_mat, 0)
-    for base_id_idx, mat_id in zip(*np.where(items_needed_mat > 0)):
+    inputs_needed_mat = -np.minimum(
+        np.matmul(plan_orders, recipe_to_mats_matrix) + bases_warehouse_mat - consumption_mat, 0)
+
+    for base_id_idx, mat_id in zip(*np.where(inputs_needed_mat > 0)):
+        mat_id = int(mat_id)
+        import_amount = int(inputs_needed_mat[base_id_idx, mat_id])
         result["bases"][base_ids[base_id_idx]]["materials"].append({
             # "material": lib.render_mat_with_icon(lib.get_material_name(mat_id), link=False), 
             "material": lib.render_mat_with_icon(mat_id),
             "at_base": int(bases_warehouse_mat[base_id_idx, mat_id]),
-            "needed": int(items_needed_mat[base_id_idx, mat_id])
+            "import_amount": import_amount,
+            "import_weight": lib.render_weight(int(inputs_needed_mat[base_id_idx, mat_id]) * weights_vec[mat_id])
         })
+        wishlist_data[bases_data[base_ids[base_id_idx]]["planetId"]][mat_id] = import_amount
 
     orders_time = cp.multiply(plan_orders, recipe_time_vec)
     buildings_time = cp.matmul(orders_time, building_to_recipe_matrix.T)
@@ -55,12 +70,13 @@ def prepare_report(base_ids, plan_orders, company_data, bases_data, warehouses_d
             "duration": lib.get_time_string(actuals_building_time[base_id_idx, building_id])
         })
 
-    purchases_vec = items_needed_mat.sum(0) - exchange_warehouse_vec
+    purchases_vec = inputs_needed_mat.sum(0) - exchange_warehouse_vec
     for mat_id in np.where(purchases_vec > 0)[0]:
         result["summary"]["purchases"].append({
             "material": lib.get_material_name(mat_id),
             "amount": purchases_vec[mat_id]
         })
+    result["wishlist"] = lib.prepare_wishlist_additems_body(wishlist_data)
     return result
 
 
@@ -81,9 +97,9 @@ def plan_production2(base_ids,
                     only_outputs_sellable=True,
                     no_outputs_purchaseable=True,
                     max_sellable_volume_pct=0.25,
-                    roi=0.03
-                    ):
-    # Constants
+                    roi=0.05,
+                    num_price_segments=12,
+                    max_rungs=24.0):
     recipe_to_mats_matrix = lib.get_recipe_to_mats_matrix()
     recipe_time_vec = lib.get_recipe_time_vec(company_data, bases_data)
     building_to_recipe_matrix = lib.get_building_to_recipe_matrix()
@@ -98,139 +114,86 @@ def plan_production2(base_ids,
     # Exchange data
     exchange_price_mat, exchange_qtys_mat = lib.get_exchange_orders_matrices(exchange_data)
     sales_limit = lib.get_avg_qty_sold_vec(exchange_data)
-    sales_prices = lib.get_current_prices_vec(exchange_data) * 0.99
+    sales_prices = exchange_price_mat[:, 0] * 0.99
 
     # Variables
     orders_var = cp.Variable((len(base_ids), recipe_to_mats_matrix.shape[0]))
     purchases_var = cp.Variable(exchange_qtys_mat.shape)
-
     sales_var = cp.Variable(lib.MAT_VECTOR_SIZE)
-    sales_revenue = cp.sum(cp.multiply(sales_var, sales_prices))
-
-    # log_roi = np.log(1 + roi)
-    # # sales_price_modifier = (
-    # #     1 - cp.exp(-log_roi * sales_var / (sales_limit + 1) * max_sellable_volume_pct)
-    # # ) / log_roi
-    # rung_size = (sales_limit + 1) / max_sellable_volume_pct   # items per 5% price rung
-    # sales_price_modifier = (
-    #     (1 - cp.exp(-log_roi * sales_var / rung_size)) / log_roi * rung_size
-    # )
-    # sales_revenue = cp.sum(cp.multiply(sales_price_modifier, sales_prices))
-
-    # --- Price-ladder sales revenue ---
-    # FIX: ladder revenue is R(s) = p0 * k * (1 - r^(-s/k)) / ln r with rung
-    # capacity k = (sales_limit + 1) / max_sellable_volume_pct. The original
-    # omitted the k factor, understating revenue by ~(sales_limit+1)/v (~2000x).
-    log_roi = np.log(1 + roi)
-    rung_capacity = (sales_limit + 1) / max_sellable_volume_pct
-    sales_price_modifier = cp.multiply(
-        rung_capacity,
-        (1 - cp.exp(-log_roi * sales_var / (sales_limit + 1) * max_sellable_volume_pct)) / log_roi,
-    )
-    sales_revenue = cp.sum(cp.multiply(sales_price_modifier, sales_prices))
-
     shipping_var = cp.Variable(bases_warehouse_mat.shape)
+
+    # --- Piecewise-linear price-ladder sales revenue ---
+    # True ladder: R(s) = p0 * k * (1 - r^(-s/k)) / ln r, k = rung capacity.
+    # R is concave => lies above its chords: model revenue with secant
+    # segments via an epigraph -> pure LP, solvable with HiGHS.
+    log_roi = np.log(1 + roi)
+    rung_capacity = (sales_limit + 1) / max_sellable_volume_pct   # (n_mats,)
+
+    fracs = np.linspace(0.0, max_rungs, num_price_segments + 1)   # fraction of a rung
+    s_brk = np.outer(rung_capacity, fracs)                        # (n_mats, B+1) qty breakpoints
+    v_brk = (sales_prices * rung_capacity / log_roi)[:, None] \
+        * (1.0 - np.exp(-log_roi * fracs))[None, :]               # (n_mats, B+1) revenue at breakpoints
+
+    revenue_var = cp.Variable(lib.MAT_VECTOR_SIZE)
+    sales_revenue = cp.sum(revenue_var)
 
     if consumables_duration is None:
         consumables_duration = max_prod_duration
     resulting_mats = (
         bases_warehouse_mat
-        + (cp.matmul(orders_var, recipe_to_mats_matrix)).sum(0)
+        + cp.matmul(orders_var, recipe_to_mats_matrix)
         + shipping_var
         - daily_consumption_mat * max_prod_duration
     )
 
     orders_time = cp.multiply(orders_var, recipe_time_vec)
     buildings_time = cp.matmul(orders_time, building_to_recipe_matrix.T)
-    max_building_time = buildings_mat * max_prod_duration
+    max_building_time = buildings_mat * consumables_duration
 
     total_purchase_cost = cp.sum(cp.multiply(purchases_var, exchange_price_mat))
 
-    total_value = cp.sum(cp.multiply(resulting_mats, np.expand_dims(sales_prices, 0)))
-
-    # objective = cp.Maximize(cp.sum(total_value) - cp.sum(total_purchase_cost) * 1.1)
     objective = cp.Maximize(sales_revenue - cp.sum(total_purchase_cost) * (1 + roi) ** max_prod_duration)
 
     constraints = [
-        # Orders are non-negative
         orders_var >= 0,
-        # Orders match available building production levels
-        # orders_time_per_building_type <= max_prod_duration,
         buildings_time <= max_building_time,
-        # Goods are non-negative after production
         resulting_mats >= 0,
-        # Purchases are non-negative and come from existing sell orders
         purchases_var >= 0,
         purchases_var <= exchange_qtys_mat,
-        # Sales constraints
         sales_var >= 0,
         sales_var <= resulting_mats.sum(0),
-        # Shipped goods come from exchange and purchases
+        # Stay within the modeled ladder range (past the last chord a
+        # piecewise model of a concave function would overestimate)
+        sales_var <= s_brk[:, -1],
         shipping_var >= 0,
         shipping_var.sum(0) <= exchange_warehouse_vec + purchases_var.sum(1),
     ]
 
-    # Purchases are within budget
+    # Revenue epigraph: revenue_var <= each chord of R(sales_var).
+    # Maximizing pushes revenue_var onto the lower envelope of the chords,
+    # which is the piecewise-linear (underestimating) approximation of R.
+    for b in range(num_price_segments):
+        slope = (v_brk[:, b + 1] - v_brk[:, b]) / (s_brk[:, b + 1] - s_brk[:, b])
+        intercept = v_brk[:, b] - slope * s_brk[:, b]
+        constraints.append(revenue_var <= cp.multiply(slope, sales_var) + intercept)
+
     if budget is not None and budget >= 0:
         constraints.append(total_purchase_cost <= budget * 100)
-    # breakpoint()
 
     if max_weight is not None:
-        constraints.append(cp.sum(cp.multiply(purchases_var.sum(1), weights_vec_subset)) <= max_weight)
+        constraints.append(cp.sum(cp.multiply(shipping_var, weights_vec), axis=1) <= max_weight)
 
     prob = cp.Problem(objective, constraints)
-    # result = prob.solve(verbose=True)
-    # objective = prob.solve(solver=cp.SCS, verbose=True, max_iters=100000, eps=1e-5)
-    solution = prob.solve(solver=cp.SCS, verbose=True, max_iters=100000, eps=1e-5)
+    solution = prob.solve(solver=cp.HIGHS, verbose=True)
 
-    # np.set_printoptions(suppress=True, precision=2)
-    # breakpoint()
-
-    result = {
-        "bases": {},
-        "summary": {"purchases": []}}
+    result = {"bases": {}, "summary": {"purchases": []}}
     for base_id in base_ids:
         result["bases"][base_id] = {"orders": [], "materials": [], "prod_times": []}
+
     # Heuristic rounding
     factor = (orders_var.value.max() / 1000)
-    final_orders = ((orders_var.value / factor).round() * factor).astype(int)
+    final_orders = (np.floor(orders_var.value / factor) * factor).astype(int)
     return final_orders
-
-
-    for base_id_idx, recipe_id in zip(*np.where(final_orders > 0)):
-        result["bases"][base_ids[base_id_idx]]["orders"].append({
-            "building": lib.GAME_DATA["buildings"][lib.GAME_DATA["recipes"][recipe_id-1]["producedIn"]-1]["name"],
-            "recipe": lib.get_recipe_output_name(recipe_id),
-            "num_orders": int(final_orders[base_id_idx, recipe_id])
-        })
-
-    items_needed_mat = -np.minimum(np.matmul(final_orders, recipe_to_mats_matrix) + bases_warehouse_mat, 0)
-    for base_id_idx, mat_id in zip(*np.where(items_needed_mat > 0)):
-        result["bases"][base_ids[base_id_idx]]["materials"].append({
-            # "material": lib.render_mat_with_icon(lib.get_material_name(mat_id), link=False), 
-            "material": lib.get_material_name(mat_id),
-            "at_base": int(bases_warehouse_mat[base_id_idx, mat_id]),
-            "needed": int(items_needed_mat[base_id_idx, mat_id])
-        })
-
-    actuals_building_time = buildings_time.value / buildings_mat
-    for base_id_idx, building_id in zip(*np.where(buildings_mat > 0)):
-        result["bases"][base_ids[base_id_idx]]["prod_times"].append({
-            "building": lib.get_building_name(building_id),
-            "duration": float(actuals_building_time[base_id_idx, building_id])
-        })
-
-
-    purchases_vec = items_needed_mat.sum(0) - exchange_warehouse_vec
-    for mat_id in np.where(purchases_vec > 0)[0]:
-        result["summary"]["purchases"].append({
-            "material": lib.get_material_name(mat_id),
-            "amount": purchases_vec[mat_id]
-        })
-    print(result)
-
-    return result
-
 
 
 def plan_production(base_id,

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}TatoTools{% endblock %}
+
+{% block content %}
+<style>
+</style>
+
+<div class="content">
+    <h2>API key</h2>
+    <div id="enter" hidden>
+        <div>Enter your <b>extended</b> API key.</div>
+        <input id="api-input" class="text-input mono" placeholder="API key">
+        <button id="save-btn" class="action-button">Save</button>
+    </div>
+    <div id="reset" hidden>
+        <div id="existing-key" class="mono"></div>
+        <button id="reset-btn" class="action-button">Reset</button>
+    </div>
+
+    <div id="msg-success" class="msg-success" ></div>
+
+</div>
+
+<script>
+
+    function maskString(str) {
+        return str.length <= 4
+            ? str
+            : '*'.repeat(str.length - 4) + str.slice(-4);
+    }
+
+    function setExisting(apiKey) {
+        $("#reset").show();
+        $("#existing-key").html(maskString(apiKey))
+    }
+
+    $(document).ready(function() {
+        const apiKey = localStorage.getItem("apiKey");
+        if (apiKey) {
+            setExisting(apiKey)
+        } else {
+            $("#enter").show();
+        }
+    });
+
+    $("#save-btn").click(function () {
+        const apiKey = $("#api-input").val();
+        localStorage.setItem("apiKey", apiKey);
+        setExisting(apiKey)
+        $("#enter").hide()
+    });
+
+    $("#reset-btn").click(function () {
+        localStorage.setItem("apiKey", "");
+        $("#api-input").val("");
+        $("#enter").show();
+        $("#reset").hide();
+    });
+
+
+</script>
+
+{% endblock %}

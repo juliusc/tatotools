@@ -90,7 +90,13 @@ def compute_plan():
         include_exchange=include_exchange,
         only_outputs_sellable=only_outputs_sellable)
 
-    return optimization.prepare_report(base_ids, plan_orders, company_data, bases_data, warehouses_data)
+    return optimization.prepare_report(
+        base_ids,
+        plan_orders,
+        consumables_duration or duration,
+        company_data,
+        bases_data,
+        warehouses_data)
 
 
 @app.route('/compute-plan-old')
@@ -145,12 +151,23 @@ def wishlist_add():
         'accept': 'text/plain',
         'Content-Type': 'application/json'
     }
-    bases_data = lib.load_bases_data(api_key)
-    planet_id = bases_data[int(request.json["base_id"])]["planetId"]
 
-    result = requests.post(f"{API_BASE_URL}/wishlist/{planet_id}/additems?apikey={api_key}", json=request.json["wishlist"])
+    base_ids = [x["wishlistId"] for x in request.json]
+    # print("deleting...")
+    # r1 = requests.post(f"{API_BASE_URL}/wishlists/deletemany?apikey={api_key}", json=base_ids)
+    # print("deletemany:", r1.status_code, r1.text)
 
-    return {}
+    print("uploading...")
+    r2 = requests.post(f"{API_BASE_URL}/wishlists/additems?apikey={api_key}", json=request.json)
+    print("additems:", r2.status_code, r2.text)
+    if r2.status_code == 429:
+        return "Rate limit exceeded", 429
+
+
+    breakpoint()
+    print("done")
+
+    return {"status": "ok"}
 
 
 @app.route('/fetch-supplies', methods=['GET'])

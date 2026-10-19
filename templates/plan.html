@@ -31,6 +31,7 @@
     }
 </style>
 
+<div id="msg-success" class="msg-error"></div>
 <div id="msg-error" class="msg-error"></div>
 
 <div class="content">
@@ -90,26 +91,30 @@
     </label>
     <input type="text" class="text-input" id="max-weight-value" name="max-weight" value="" placeholder="unlimited">
 
-    <label id="only-outputs-sellable-text">
+    <!-- <label id="count-sell-orders-text">
+        <input type="checkbox" id="count-sell-orders" unchecked>
+        Count 
+        <div class="help-badge">?<div class="help-tooltip">
+            TODO
+        </div></div>
+    </label> -->
+    <!-- <label id="only-outputs-sellable-text">
         <input type="checkbox" id="only-outputs-sellable" unchecked>
         Disable selling inputs
         <div class="help-badge">?<div class="help-tooltip">
             If checked, the algorithm only permits selling output products, which encourages the algorithm to use up existing inputs. 
             If unchecked, the algorithm may recommend selling existing inputs.
         </div></div>
-    </label>
-    <!-- <br> -->
-    <!-- <label id="only-outputs-sellable">
-        <input type="checkbox" id="only-outputs-sellable" unchecked>
-        Disable buying outputs
-        <div class="help-badge">?<div class="help-tooltip">
-            If checked, any products that are the output of any owned production building cannot be bought.
-        </div></div>
     </label> -->
+    <!-- <br> -->
 
 </div>
 
-<div><button id="plan-button" class="action-button">Plan</button></div>
+<div style="display: flex; gap: 12px;">
+    <button id="plan-button" class="action-button">Plan</button>
+    <button id="upload-wishlist-button" class="action-button" disabled>Upload wishlist</button>
+    <button id="clear-button" class="action-button" disabled>Clear</button>
+</div>
 
 <div id="thinking-plan", class="thinking" hidden>      
     <div class="thinking-icon"></div>        
@@ -138,7 +143,6 @@
     }
 
     function modifyContent() {
-        console.log(this)
         const $c = $(this);
         if ($c.data('collapseInit')) return;
         $c.data('collapseInit', true);
@@ -159,12 +163,13 @@
         $c.append($body);
     };
 
-    function formatReport(report) {
-        // let report = localStorage.getItem("report");
-        // if (!report) {
-        //     return;
-        // }
+    function formatReport() {
+        let report = localStorage.getItem("plan");
         $("#plan-output").remove();
+        if (typeof report !== 'string') {
+            return;
+        }
+        report = JSON.parse(report)
         $("body").append(`<div class="content" id="plan-output"><h2>Production Plan</h2></div>`)
         for (const [base_id, base_data] of Object.entries(report.bases)) {
             $("#plan-output").append(`<div class="content" id="report-${base_id}"><h3>${base_data["name"]}</h3></div>`)
@@ -181,20 +186,24 @@
             $(`#orders-${base_id}`).append(table)
             $(`#orders-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
             $(`#orders-${base_id}`).each(modifyContent)
+            $(`#orders-${base_id}`).toggleClass("collapsed")
+
 
             $(`#report-${base_id}`).append(`<div class="content" id="mats-${base_id}"><h4>Inputs</h4></div>`)
-            table = `<table id=mats-${base_id}-table><thead><tr><th>Material</th><th>At Base</th><th>Needed</th></tr></thead>`
+            table = `<table id=mats-${base_id}-table><thead><tr><th>Material</th><th>At Base</th><th>Import amount</th><th>Import weight</th></tr></thead>`
             base_data["materials"].forEach(row => {
                 table += `<tr>`;
                 table += "<td>" + row["material"] + "</td>"
                 table += "<td>" + row["at_base"] + "</td>"
-                table += "<td>" + row["needed"] + "</td>"
+                table += "<td>" + row["import_amount"] + "</td>"
+                table += "<td>" + row["import_weight"] + "</td>"
                 table += '</tr>';
             });
             table += "</tbody></table>"
             $(`#mats-${base_id}`).append(table)
             $(`#mats-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
             $(`#mats-${base_id}`).each(modifyContent)
+            $(`#mats-${base_id}`).toggleClass("collapsed")
 
             $(`#report-${base_id}`).append(`<div class="content" id="time-${base_id}"><h4>Production duration</h4></div>`)
             table = `<table id=time-${base_id}-table><thead><tr><th>Building</th><th>Duration</th></tr></thead>`
@@ -208,8 +217,10 @@
             $(`#time-${base_id}`).append(table)
             $(`#time-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
             $(`#time-${base_id}`).each(modifyContent)
+            $(`#time-${base_id}`).toggleClass("collapsed")
 
             $(`#report-${base_id}`).each(modifyContent)
+            $(`#report-${base_id}`).toggleClass("collapsed")
         }
     }
 
@@ -257,6 +268,8 @@
                 $(document).on('mouseup', function() {
                     dragging = false;                       // end the drag, wherever the mouse is
                 });
+                formatReport();
+
 
             },
             error: function(xhr, status, error) {
@@ -296,6 +309,8 @@
             return
         } else {
             $("#msg-error").text("")
+            $("#upload-wishlist-button").prop("disabled", true);
+            $("#clear-button").prop("disabled", true);
         }
 
         data = {
@@ -318,9 +333,11 @@
                 $("#msg-error").text("")
                 $('#thinking-plan').hide()
                 $('#result').show()
-                // console.log(response)
-                localStorage.setItem("report", response.bases)
-                formatReport(response)
+                localStorage.setItem("plan", JSON.stringify(response))
+                console.log(response)
+                formatReport()
+                $("#upload-wishlist-button").prop("disabled", false);
+                $("#clear-button").prop("disabled", false);
             },
             error: function(xhr, status, error) {
                 console.log(xhr, status, error)
@@ -330,6 +347,9 @@
                 } else if (xhr.status == 401) {
                     $("#msg-error").text("You must be a member of ATS.")
                     $('#thinking-plan').hide();
+                } else if (xhr.status == 429) {
+                    $("#msg-error").text("Rate limit exceeded.")
+                    $('#thinking-plan').hide();
                 } else {
                     $("#msg-error").text("Server error.")
                     $('#thinking-plan').hide();
@@ -338,6 +358,40 @@
         });
     });
 
+    $("#clear-button").click(function () {
+        localStorage.removeItem("plan")
+        formatReport();
+    });
+
+    $("#upload-wishlist-button").click(function () {
+        let plan = JSON.parse(localStorage.getItem("plan"));
+        console.log(plan.wishlist)
+        $.ajax({
+            url: '/wishlist-add',
+            method: 'POST',
+            contentType: "application/json",
+            headers: {'Gt-Api-Key': localStorage.getItem('apiKey')},
+            data: JSON.stringify(plan.wishlist),
+            success: function(response) {
+                $("#msg-success").text("Upload success")
+            },
+            error: function(xhr, status, error) {
+                if (xhr.status == 0) {
+                    $("#msg-error").text("Connection error.")
+                    $('#thinking-plan').hide();
+                } else if (xhr.status == 401) {
+                    $("#msg-error").text("You must be a member of ATS.")
+                    $('#thinking-plan').hide();
+                } else if (xhr.status == 429) {
+                    $("#msg-error").text("Rate limit exceeded.")
+                    $('#thinking-plan').hide();
+                } else {
+                    $("#msg-error").text("Server error.")
+                    $('#thinking-plan').hide();
+                }
+            }
+        });
+    });
 </script>
 
 {% endblock %}
