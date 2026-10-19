@@ -75,7 +75,6 @@ RECIPE_ID_TO_CUSTOM_NAMES = {
 EPSILON = 1e-3
 
 API_BASE_URL = "https://api.g2.galactictycoons.com/public"
-API_KEY = os.environ["GT_API_KEY"]
 
 
 # DEBUG_MODE = True

@@ -55,11 +55,15 @@ def fetch_bases():
 @app.route('/compute-plan')
 def compute_plan():
     api_key = request.headers.get("Gt-Api-Key")
-    company_data, bases_data = lib.load_company_and_bases_data(api_key)
-    if company_data["gId"] != 39:
-        return "You must be a member of ATS", 401
-    exchange_data = lib.load_exchange_data(api_key)
-    exchange_orders_data = lib.load_exchange_orders(api_key)
+    try:
+        company_data, bases_data = lib.load_company_and_bases_data(api_key)
+        if company_data["gId"] != 39:
+            return "You must be a member of ATS", 401
+        exchange_data = lib.load_exchange_data(api_key)
+        exchange_orders_data = lib.load_exchange_orders(api_key)
+        warehouses_data = lib.load_warehouses_data(api_key)
+    except lib.RateLimitExceededError:
+        return "Rate limit exceeded", 429
 
     base_ids = [int(x) for x in request.args.getlist("base_ids")]
     budget = request.args["budget"]
@@ -74,7 +78,6 @@ def compute_plan():
     include_exchange = True if request.args.get("include_exchange") == "true" else False
     only_outputs_sellable = True if request.args.get("only_outputs_sellable") == "true" else False
 
-    warehouses_data = lib.load_warehouses_data(api_key)
     plan_orders = optimization.plan_production2(
         base_ids,
         company_data,

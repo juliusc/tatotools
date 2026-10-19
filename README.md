@@ -8,7 +8,6 @@ Launching
 
 ```
 conda activate tatotools
-GT_API_KEY=<your api key>
 python3 -m flask run --host=localhost --port=8000
 ```
 
