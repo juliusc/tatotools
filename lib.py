@@ -97,13 +97,14 @@ def fetch_url(url):
         return CACHE[url]
     
     response = requests.get(url)
-    if response.status_code == 209:
+    if response.status_code == 409:
         raise RateLimitExceededError
     elif response.status_code == 401:
         raise InvalidApiKeyError
     elif response.status_code == 200:
         pass
     else:
+        print(response.status_code)
         print(response.text)
         raise Exception
     response_json = response.json()
