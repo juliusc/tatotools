@@ -211,6 +211,13 @@ def get_company_wide_mats(warehouses_data, exchange_orders_data):
         vec[order_data["matId"]] += order_data["qty"]
     return vec
 
+def get_exchange_mats(exchange_orders_data):
+    vec = np.zeros(MAT_VECTOR_SIZE)
+    for order_data in exchange_orders_data:
+        vec[order_data["matId"]] += order_data["qty"]
+    return vec
+
+
 def get_exchange_warehouse_data(warehouses_data):
     for warehouse_data in warehouses_data.values():
         if warehouse_data["type"] == 3:
