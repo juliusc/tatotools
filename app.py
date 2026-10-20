@@ -20,8 +20,11 @@ API_BASE_URL = "https://api.g2.galactictycoons.com/public"
 os.makedirs("data/base", exist_ok=True)
 os.makedirs("data/warehouse", exist_ok=True)
 
-class NotATSError(Exception):
-    pass
+
+@app.errorhandler(Exception)
+def handle_app_error(e):
+    return jsonify(error=type(e).__name__, message=str(e)), e.status_code
+
 
 # Store timestamp in session to persist across pages
 @app.route('/')
@@ -49,17 +52,12 @@ def fetch_bases():
 @app.route('/compute-plan')
 def compute_plan():
     api_key = request.headers.get("Gt-Api-Key")
-    try:
-        company_data, bases_data = lib.load_company_and_bases_data(api_key)
-        if company_data["gId"] != 39:
-            return "You must be a member of ATS", 401
-        exchange_data = lib.load_exchange_data(api_key)
-        exchange_orders_data = lib.load_exchange_orders(api_key)
-        warehouses_data = lib.load_warehouses_data(api_key)
-    except lib.RateLimitExceededError:
-        return "Rate limit exceeded", 429
-    except lib.InvalidApiKeyError:
-        return "Invalid API key", 402
+    company_data, bases_data = lib.load_company_and_bases_data(api_key)
+    if company_data["gId"] != 39:
+        return "You must be a member of ATS", 401
+    exchange_data = lib.load_exchange_data(api_key)
+    exchange_orders_data = lib.load_exchange_orders(api_key)
+    warehouses_data = lib.load_warehouses_data(api_key)
 
     base_ids = [int(x) for x in request.args.getlist("base_ids")]
     budget = request.args["budget"]
@@ -107,18 +105,14 @@ def wishlist_add():
     }
 
     base_ids = [x["wishlistId"] for x in request.json]
-    # print("deleting...")
-    # r1 = requests.post(f"{API_BASE_URL}/wishlists/deletemany?apikey={api_key}", json=base_ids)
-    # print("deletemany:", r1.status_code, r1.text)
+    print("deleting...")
+    r1 = requests.post(f"{API_BASE_URL}/wishlists/deletemany?apikey={api_key}", json=base_ids)
+    lib.handle_gt_api_response(r1)
+    print("deletemany:", r1.status_code, r1.text)
 
     print("uploading...")
     r2 = requests.post(f"{API_BASE_URL}/wishlists/additems?apikey={api_key}", json=request.json)
-    print("additems:", r2.status_code, r2.text)
-    if r2.status_code == 429:
-        return "Rate limit exceeded", 429
-    elif r2.status_code == 401:
-        return "Invalid API key", 402
-
+    lib.handle_gt_api_response(r2)
 
     print("done")
 

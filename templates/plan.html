@@ -31,7 +31,7 @@
     }
 </style>
 
-<div id="msg-success" class="msg-error"></div>
+<div id="msg-success" class="msg-success"></div>
 <div id="msg-error" class="msg-error"></div>
 
 <div class="content">
@@ -273,24 +273,9 @@
 
             },
             error: function(xhr, status, error) {
-                // Handle errors
-                $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
-                if (error == "INTERNAL SERVER ERROR") {
-                    $("#msg-error").text("Internal server error")
-                    $('#thinking-fetch-bases').hide();
-                } 
-                if (xhr.status == 0) {
-                    $("#msg-error").text("Connection error.")
-                } else if (xhr.status == 401) {
-                    $("#msg-error").text("You must be a member of ATS.")
-                } else if (xhr.status == 402) {
-                    $("#msg-error").text("Invalid API key.")
-                } else if (xhr.status == 429) {
-                    $("#msg-error").text("Rate limit exceeded.")
-                } else {
-                    $("#msg-error").text("Server error.")
-                }
-                $('#thinking-plan').hide();
+                const msg = xhr.responseJSON ? xhr.responseJSON.message : "Unexpected error";
+                $("#msg-error").text(msg)
+                $('#thinking-fetch-bases').hide();
             }
         });
 
@@ -351,24 +336,8 @@
                 $("#clear-button").prop("disabled", false);
             },
             error: function(xhr, status, error) {
-                // Handle errors
-                $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
-                console.error('AJAX Error:', status, error);
-                if (error == "INTERNAL SERVER ERROR") {
-                    $("#msg-error").text("Internal server error")
-                    $('#thinking-fetch-bases').hide();
-                } 
-                if (xhr.status == 0) {
-                    $("#msg-error").text("Connection error.")
-                } else if (xhr.status == 401) {
-                    $("#msg-error").text("You must be a member of ATS.")
-                } else if (xhr.status == 402) {
-                    $("#msg-error").text("Invalid API key.")
-                } else if (xhr.status == 429) {
-                    $("#msg-error").text("Rate limit exceeded.")
-                } else {
-                    $("#msg-error").text("Server error.")
-                }
+                const msg = xhr.responseJSON ? xhr.responseJSON.message : "Unexpected error";
+                $("#msg-error").text(msg)
                 $('#thinking-plan').hide();
             }
         });
@@ -392,25 +361,8 @@
                 $("#msg-success").text("Upload success")
             },
             error: function(xhr, status, error) {
-                // Handle errors
-                $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
-                console.error('AJAX Error:', status, error);
-                if (error == "INTERNAL SERVER ERROR") {
-                    $("#msg-error").text("Internal server error")
-                    $('#thinking-fetch-bases').hide();
-                } 
-                if (xhr.status == 0) {
-                    $("#msg-error").text("Connection error.")
-                } else if (xhr.status == 401) {
-                    $("#msg-error").text("You must be a member of ATS.")
-                } else if (xhr.status == 402) {
-                    $("#msg-error").text("Invalid API key.")
-                } else if (xhr.status == 429) {
-                    $("#msg-error").text("Rate limit exceeded.")
-                } else {
-                    $("#msg-error").text("Server error.")
-                }
-                $('#thinking-plan').hide();
+                const msg = xhr.responseJSON ? xhr.responseJSON.message : "Unexpected error";
+                $("#msg-error").text(msg)
             }
         });
     });

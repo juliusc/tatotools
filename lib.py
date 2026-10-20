@@ -85,11 +85,33 @@ if Path(CACHE_FILE).exists():
 else:
     CACHE = {}
 
-class RateLimitExceededError(Exception):
-    pass
+class NotATSError(Exception):
+    status_code = 460
+    msg = "You must be a member of ATS."
+
 
 class InvalidApiKeyError(Exception):
-    pass
+    status_code = 461
+    msg = "Invalid API key."
+
+
+class EmptyApiKeyError(Exception):
+    status_code = 462
+    msg = "Go to API keys to set your extended API key."
+
+
+class RateLimitExceededError(Exception):
+    status_code = 463
+    msg = "Rate limit exceeded"
+
+
+def handle_gt_api_response(response):
+    if response.status_code == 429:
+        raise RateLimitExceededError("Rate limit exceeded")
+    elif response.status_code == 401:
+        raise InvalidApiKeyError("Invalid or empty API key. Go 'API key' to set your extended API key.")
+    elif response.status_code != 200:
+        raise Exception("Unhandled GT API error")
 
 
 def fetch_url(url):
@@ -97,16 +119,7 @@ def fetch_url(url):
         return CACHE[url]
     
     response = requests.get(url)
-    if response.status_code == 409:
-        raise RateLimitExceededError
-    elif response.status_code == 401:
-        raise InvalidApiKeyError
-    elif response.status_code == 200:
-        pass
-    else:
-        print(response.status_code)
-        print(response.text)
-        raise Exception
+    handle_gt_api_response(response)
     response_json = response.json()
     if DEBUG_MODE:
         CACHE[url] = response_json
@@ -127,7 +140,10 @@ def load_company_and_bases_data(api_key):
 
 
 def load_company_data(api_key):
-    return fetch_url(f"{API_BASE_URL}/company?apikey={api_key}")
+    company_data = fetch_url(f"{API_BASE_URL}/company?apikey={api_key}")
+    if company_data["gId"] != 39:
+        raise NotATSError("You must be a member of ATS")
+    return company_data
 
 
 def load_mat_details(min_time=180):
