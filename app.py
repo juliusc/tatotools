@@ -166,8 +166,6 @@ def wishlist_add():
     if r2.status_code == 429:
         return "Rate limit exceeded", 429
 
-
-    breakpoint()
     print("done")
 
     return {"status": "ok"}
