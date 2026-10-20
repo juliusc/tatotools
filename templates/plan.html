@@ -275,11 +275,22 @@
             error: function(xhr, status, error) {
                 // Handle errors
                 $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
-                console.error('AJAX Error:', status, error);
                 if (error == "INTERNAL SERVER ERROR") {
                     $("#msg-error").text("Internal server error")
                     $('#thinking-fetch-bases').hide();
+                } 
+                if (xhr.status == 0) {
+                    $("#msg-error").text("Connection error.")
+                } else if (xhr.status == 401) {
+                    $("#msg-error").text("You must be a member of ATS.")
+                } else if (xhr.status == 402) {
+                    $("#msg-error").text("Invalid API key.")
+                } else if (xhr.status == 429) {
+                    $("#msg-error").text("Rate limit exceeded.")
+                } else {
+                    $("#msg-error").text("Server error.")
                 }
+                $('#thinking-plan').hide();
             }
         });
 
@@ -340,20 +351,25 @@
                 $("#clear-button").prop("disabled", false);
             },
             error: function(xhr, status, error) {
-                console.log(xhr, status, error)
+                // Handle errors
+                $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
+                console.error('AJAX Error:', status, error);
+                if (error == "INTERNAL SERVER ERROR") {
+                    $("#msg-error").text("Internal server error")
+                    $('#thinking-fetch-bases').hide();
+                } 
                 if (xhr.status == 0) {
                     $("#msg-error").text("Connection error.")
-                    $('#thinking-plan').hide();
                 } else if (xhr.status == 401) {
                     $("#msg-error").text("You must be a member of ATS.")
-                    $('#thinking-plan').hide();
+                } else if (xhr.status == 402) {
+                    $("#msg-error").text("Invalid API key.")
                 } else if (xhr.status == 429) {
                     $("#msg-error").text("Rate limit exceeded.")
-                    $('#thinking-plan').hide();
                 } else {
                     $("#msg-error").text("Server error.")
-                    $('#thinking-plan').hide();
                 }
+                $('#thinking-plan').hide();
             }
         });
     });
@@ -376,19 +392,25 @@
                 $("#msg-success").text("Upload success")
             },
             error: function(xhr, status, error) {
+                // Handle errors
+                $('.controls').html('<p style="color: red;">Error loading names: ' + error + '</p>');
+                console.error('AJAX Error:', status, error);
+                if (error == "INTERNAL SERVER ERROR") {
+                    $("#msg-error").text("Internal server error")
+                    $('#thinking-fetch-bases').hide();
+                } 
                 if (xhr.status == 0) {
                     $("#msg-error").text("Connection error.")
-                    $('#thinking-plan').hide();
                 } else if (xhr.status == 401) {
                     $("#msg-error").text("You must be a member of ATS.")
-                    $('#thinking-plan').hide();
+                } else if (xhr.status == 402) {
+                    $("#msg-error").text("Invalid API key.")
                 } else if (xhr.status == 429) {
                     $("#msg-error").text("Rate limit exceeded.")
-                    $('#thinking-plan').hide();
                 } else {
                     $("#msg-error").text("Server error.")
-                    $('#thinking-plan').hide();
                 }
+                $('#thinking-plan').hide();
             }
         });
     });

@@ -88,6 +88,10 @@ else:
 class RateLimitExceededError(Exception):
     pass
 
+class InvalidApiKeyError(Exception):
+    pass
+
+
 def fetch_url(url):
     if DEBUG_MODE and url in CACHE:
         return CACHE[url]
@@ -95,7 +99,12 @@ def fetch_url(url):
     response = requests.get(url)
     if response.status_code == 209:
         raise RateLimitExceededError
-    elif response.status_code != 200:
+    elif response.status_code == 401:
+        raise InvalidApiKeyError
+    elif response.status_code == 200:
+        pass
+    else:
+        print(response.text)
         raise Exception
     response_json = response.json()
     if DEBUG_MODE:

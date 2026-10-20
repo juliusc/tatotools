@@ -28,26 +28,20 @@ class NotATSError(Exception):
 def index():
     return redirect("/plan")
 
-# @app.route('/assets')
-# def assets():
-#     return render_template('assets.html')
 
 @app.route('/apikey')
 def apikey():
     return render_template('apikey.html')
 
+
 @app.route('/plan')
 def plan():
     return render_template('plan.html')
 
-@app.route('/plan-old')
-def plan_old():
-    return render_template('plan-old.html')
 
 @app.route('/fetch-bases', methods=['GET'])
 def fetch_bases():
     api_key = request.headers.get("Gt-Api-Key")
-    print(api_key)
     bases_data = lib.load_bases_data(api_key=api_key)
     return jsonify(sorted([(base_data["name"], base_data["id"]) for base_data in bases_data.values()])) 
 
@@ -64,6 +58,8 @@ def compute_plan():
         warehouses_data = lib.load_warehouses_data(api_key)
     except lib.RateLimitExceededError:
         return "Rate limit exceeded", 429
+    except lib.InvalidApiKeyError:
+        return "Invalid API key", 402
 
     base_ids = [int(x) for x in request.args.getlist("base_ids")]
     budget = request.args["budget"]
@@ -102,51 +98,6 @@ def compute_plan():
         warehouses_data)
 
 
-@app.route('/compute-plan-old')
-def compute_plan_old():
-    api_key = request.headers.get("Gt-Api-Key")
-    company_data, bases_data = lib.load_company_and_bases_data(api_key)
-    exchange_data = lib.load_exchange_data(api_key)
-    exchange_orders_data = lib.load_exchange_orders(api_key)
-
-    base_ids = [int(x) for x in request.args.getlist("base_ids")]
-    budget = request.args["budget"]
-    budget = float(budget) if budget else None
-    duration = float(request.args["duration"]) / 24
-    consumables_duration = request.args["consumables_duration"]
-    consumables_duration = float(consumables_duration) / 24 if consumables_duration else None
-    max_weight = request.args["max_weight"]
-    max_weight = int(max_weight) if max_weight else None
-
-    include_consumables = True if request.args.get("include_consumables") == "true" else False
-    include_exchange = True if request.args.get("include_exchange") == "true" else False
-    only_outputs_sellable = True if request.args.get("only_outputs_sellable") == "true" else False
-
-    warehouses_data = lib.load_warehouses_data(api_key)
-    purchases_df, order_duration_df, orders_df, mats_df, wishlist = optimization.plan_production(
-        base_ids[0],
-        company_data,
-        bases_data,
-        warehouses_data,
-        budget,
-        duration,
-        exchange_data,
-        exchange_orders_data,
-        consumables_duration=consumables_duration,
-        max_weight=max_weight,
-        include_consumables=include_consumables,
-        include_exchange=include_exchange,
-        only_outputs_sellable=only_outputs_sellable)
-    return {
-        "Purchases": purchases_df.values.tolist(),
-        "Duration": order_duration_df.values.tolist(),
-        "Orders": orders_df.values.tolist(),
-        "Materials": mats_df.values.tolist(),
-        "Wishlist": wishlist
-    }
-
-
-
 @app.post('/wishlist-add')
 def wishlist_add():
     api_key = request.headers.get("Gt-Api-Key")
@@ -165,6 +116,9 @@ def wishlist_add():
     print("additems:", r2.status_code, r2.text)
     if r2.status_code == 429:
         return "Rate limit exceeded", 429
+    elif r2.status_code == 401:
+        return "Invalid API key", 402
+
 
     print("done")
 
