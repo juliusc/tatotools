@@ -96,7 +96,7 @@ def plan_production2(base_ids,
                     only_outputs_sellable=True,
                     no_outputs_purchaseable=True,
                     max_sellable_volume_pct=0.25,
-                    roi=0.05,
+                    roi=0.02,
                     num_price_segments=12,
                     max_rungs=24.0):
     recipe_to_mats_matrix = lib.get_recipe_to_mats_matrix()
@@ -120,6 +120,8 @@ def plan_production2(base_ids,
     orders_var = cp.Variable((len(base_ids), recipe_to_mats_matrix.shape[0]))
     purchases_var = cp.Variable(exchange_qtys_mat.shape)
     sales_var = cp.Variable(lib.MAT_VECTOR_SIZE)
+    exchange_sales_var = cp.Variable(lib.MAT_VECTOR_SIZE)
+    total_sales = sales_var + exchange_sales_var
     shipping_var = cp.Variable(bases_warehouse_mat.shape)
 
     # --- Piecewise-linear price-ladder sales revenue ---
@@ -127,7 +129,7 @@ def plan_production2(base_ids,
     # R is concave => lies above its chords: model revenue with secant
     # segments via an epigraph -> pure LP, solvable with HiGHS.
     log_roi = np.log(1 + roi)
-    rung_capacity = (sales_limit + 1) / max_sellable_volume_pct   # (n_mats,)
+    rung_capacity = (sales_limit + 1) * max_sellable_volume_pct   # (n_mats,)
 
     fracs = np.linspace(0.0, max_rungs, num_price_segments + 1)   # fraction of a rung
     s_brk = np.outer(rung_capacity, fracs)                        # (n_mats, B+1) qty breakpoints
@@ -162,11 +164,14 @@ def plan_production2(base_ids,
         purchases_var <= exchange_qtys_mat,
         sales_var >= 0,
         sales_var <= resulting_mats.sum(0),
+        exchange_sales_var >= 0,
+        # exchange_sales_var <= exchange_warehouse_vec - shipping_var.sum(0) + purchases_var.sum(1),
         # Stay within the modeled ladder range (past the last chord a
         # piecewise model of a concave function would overestimate)
-        sales_var <= s_brk[:, -1],
+        total_sales <= s_brk[:, -1],
         shipping_var >= 0,
-        shipping_var.sum(0) <= exchange_warehouse_vec + purchases_var.sum(1),
+        # shipping_var.sum(0) <= exchange_warehouse_vec + purchases_var.sum(1),
+        exchange_sales_var + shipping_var.sum(0) <= exchange_warehouse_vec + purchases_var.sum(1)
     ]
 
     # Revenue epigraph: revenue_var <= each chord of R(sales_var).
@@ -175,7 +180,7 @@ def plan_production2(base_ids,
     for b in range(num_price_segments):
         slope = (v_brk[:, b + 1] - v_brk[:, b]) / (s_brk[:, b + 1] - s_brk[:, b])
         intercept = v_brk[:, b] - slope * s_brk[:, b]
-        constraints.append(revenue_var <= cp.multiply(slope, sales_var) + intercept)
+        constraints.append(revenue_var <= cp.multiply(slope, total_sales) + intercept)
 
     if budget is not None and budget >= 0:
         constraints.append(total_purchase_cost <= budget * 100)
@@ -185,6 +190,7 @@ def plan_production2(base_ids,
 
     prob = cp.Problem(objective, constraints)
     solution = prob.solve(solver=cp.HIGHS, verbose=True)
+    # breakpoint()
 
     result = {"bases": {}, "summary": {"purchases": []}}
     for base_id in base_ids:
