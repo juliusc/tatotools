@@ -77,7 +77,7 @@ EPSILON = 1e-3
 API_BASE_URL = "https://api.g2.galactictycoons.com/public"
 
 
-# DEBUG_MODE = True
+DEBUG_MODE = True
 DEBUG_MODE = False
 CACHE_FILE = "cache.json"
 if Path(CACHE_FILE).exists():

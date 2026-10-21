@@ -81,6 +81,13 @@
             overflow: hidden;
             min-height: 0;
         }
+        .msg-bar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: #fff;  /* must be opaque, or content shows through */
+            padding: 4px 0;
+        }
 
         .nav-menu {
             margin: 20px 0;
@@ -88,6 +95,9 @@
             background: #fff;
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1001;  /* above the message bar */
         }
         .nav-menu a {
             margin-right: 20px;
@@ -241,6 +251,10 @@
     <div class="nav-menu">
         <a href="{{ url_for('plan') }}" class="{{ 'active' if request.endpoint == 'plan' else '' }}">Plan production</a>
         <a href="{{ url_for('apikey') }}" class   ="{{ 'active' if request.endpoint == 'apikey' else '' }}">API key</a>
+        <div class="msg-bar">
+            <div id="msg-success" class="msg-success"></div>
+            <div id="msg-error" class="msg-error"></div>
+        </div>
     </div>
     
     {% block content %}{% endblock %}

@@ -53,8 +53,6 @@ def fetch_bases():
 def compute_plan():
     api_key = request.headers.get("Gt-Api-Key")
     company_data, bases_data = lib.load_company_and_bases_data(api_key)
-    if company_data["gId"] != 39:
-        return "You must be a member of ATS", 401
     exchange_data = lib.load_exchange_data(api_key)
     exchange_orders_data = lib.load_exchange_orders(api_key)
     warehouses_data = lib.load_warehouses_data(api_key)
