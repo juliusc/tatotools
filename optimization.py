@@ -9,7 +9,8 @@ import lib
 EPSILON = 1e-3
 
 
-def prepare_report(base_ids, plan_orders, consumables_duration, company_data, bases_data, warehouses_data):
+def prepare_report(base_ids, plan_orders, consumables_duration, repair_threshold,
+                   repair_delay, company_data, bases_data, warehouses_data):
     recipe_to_mats_matrix = lib.get_recipe_to_mats_matrix()
     building_to_recipe_matrix = lib.get_building_to_recipe_matrix()
     recipe_time_vec = lib.get_recipe_time_vec(company_data, bases_data)
@@ -17,10 +18,14 @@ def prepare_report(base_ids, plan_orders, consumables_duration, company_data, ba
 
     bases_warehouse_mat = lib.get_base_storage_matrix(base_ids, bases_data, warehouses_data)
     buildings_mat = lib.get_building_levels_matrix(base_ids, bases_data, prod_buildings_only=True)
-    exchange_warehouse_vec = lib.get_warehouse_contents_vec(lib.get_exchange_warehouse_data(warehouses_data))
+    exchange_warehouse_vec = lib.get_warehouse_contents_vec(
+        lib.get_exchange_warehouse_data(warehouses_data))
     consumption_mat = lib.get_daily_consumption_matrix(base_ids, bases_data) * consumables_duration
+    repair_costs_mat = lib.get_bases_repair_cost_mat(
+        base_ids, bases_data, repair_threshold, delay=repair_delay)
 
-    base_idxs_to_names = dict((idx, bases_data[base_ids[idx]]["name"]) for idx in range(len(base_ids)))
+    base_idxs_to_names = dict((idx, bases_data[base_ids[idx]]["name"])
+                              for idx in range(len(base_ids)))
 
     summary_purchases = defaultdict(int)
     summary_purchase_costs = defaultdict(int)
@@ -34,7 +39,7 @@ def prepare_report(base_ids, plan_orders, consumables_duration, company_data, ba
     for base_id in base_ids:
         result["bases"][base_id] = {
             "name": bases_data[base_id]["name"],
-            "orders": [], "materials": [], "prod_times": []
+            "orders": [], "import_materials": [], "excess_materials": [], "prod_times": []
         }
 
     for base_id_idx, recipe_id in zip(*np.where(plan_orders > 0)):
@@ -45,20 +50,33 @@ def prepare_report(base_ids, plan_orders, consumables_duration, company_data, ba
         })
         summary_orders[lib.render_recipe_with_icon(recipe_id)] += int(plan_orders[base_id_idx, recipe_id])
 
-    inputs_needed_mat = -np.minimum(
-        np.matmul(plan_orders, recipe_to_mats_matrix) + bases_warehouse_mat - consumption_mat, 0)
+    initial_mat = bases_warehouse_mat - consumption_mat - repair_costs_mat
+    production_net = np.matmul(plan_orders, recipe_to_mats_matrix)
+    final_mat = initial_mat + production_net
+    inputs_needed_mat = -np.minimum(final_mat, 0)
 
     for base_id_idx, mat_id in zip(*np.where(inputs_needed_mat > 0)):
         mat_id = int(mat_id)
         import_amount = int(inputs_needed_mat[base_id_idx, mat_id])
-        result["bases"][base_ids[base_id_idx]]["materials"].append({
-            # "material": lib.render_mat_with_icon(lib.get_material_name(mat_id), link=False), 
+        result["bases"][base_ids[base_id_idx]]["import_materials"].append({
             "material": lib.render_mat_with_icon(mat_id),
             "at_base": int(bases_warehouse_mat[base_id_idx, mat_id]),
             "import_amount": import_amount,
-            "import_weight": lib.render_weight(int(inputs_needed_mat[base_id_idx, mat_id]) * weights_vec[mat_id])
+            "import_weight": lib.render_weight(import_amount * weights_vec[mat_id])
         })
         wishlist_data[bases_data[base_ids[base_id_idx]]["planetId"]][mat_id] = import_amount
+
+    production_net = np.matmul(plan_orders, recipe_to_mats_matrix)
+    draws_mat = consumption_mat + repair_costs_mat + np.maximum(-production_net, 0)
+    excess_mat = np.maximum(bases_warehouse_mat - draws_mat, 0)
+    for base_id_idx, mat_id in zip(*np.where(excess_mat > 0)):
+        mat_id = int(mat_id)
+        excess_amount = int(excess_mat[base_id_idx, mat_id])
+        result["bases"][base_ids[base_id_idx]]["excess_materials"].append({
+            "material": lib.render_mat_with_icon(mat_id),
+            "amount": excess_amount,
+            "weight": lib.render_weight(excess_amount * weights_vec[mat_id])
+        })
 
     orders_time = cp.multiply(plan_orders, recipe_time_vec)
     buildings_time = cp.matmul(orders_time, building_to_recipe_matrix.T)
@@ -90,8 +108,8 @@ def plan_production2(base_ids,
                     exchange_orders_data,
                     consumables_duration=None,
                     max_weight=None,
-                    include_consumables=True,
-                    include_exchange=True,
+                    repair_threshold=None,
+                    repair_delay=0.0,
                     no_inputs_sellable=True,
                     only_outputs_sellable=True,
                     no_outputs_purchaseable=True,
@@ -109,7 +127,10 @@ def plan_production2(base_ids,
     exchange_warehouse_vec = lib.get_warehouse_contents_vec(lib.get_exchange_warehouse_data(warehouses_data))
     exchange_warehouse_vec += lib.get_exchange_mats(exchange_orders_data)
     buildings_mat = lib.get_building_levels_matrix(base_ids, bases_data, prod_buildings_only=True)
+
     daily_consumption_mat = lib.get_daily_consumption_matrix(base_ids, bases_data)
+    repair_costs_mat = lib.get_bases_repair_cost_mat(
+        base_ids, bases_data, repair_threshold, delay=repair_delay)
 
     # Exchange data
     exchange_price_mat, exchange_qtys_mat = lib.get_exchange_orders_matrices(exchange_data)
@@ -146,6 +167,7 @@ def plan_production2(base_ids,
         + cp.matmul(orders_var, recipe_to_mats_matrix)
         + shipping_var
         - daily_consumption_mat * max_prod_duration
+        - repair_costs_mat
     )
 
     orders_time = cp.multiply(orders_var, recipe_time_vec)

@@ -11,6 +11,15 @@ import pandas as pd
 
 
 GAME_DATA = json.load(open("data/game_data.json"))
+PLANETS_DATA = {}
+for system_data in GAME_DATA["systems"]:
+    for planet_data in system_data["planets"] or []:
+        PLANETS_DATA[planet_data["id"]] = planet_data
+BUILDING_TYPES_DATA = {}
+for building_type_data in GAME_DATA["buildings"]:
+    BUILDING_TYPES_DATA[building_type_data["id"]] = building_type_data
+
+
 RECIPE_ID_TO_RECIPES = dict((recipe["id"], recipe) for recipe in GAME_DATA["recipes"])
 
 MAT_NAMES_TO_IDS = {}
@@ -28,6 +37,9 @@ MAT_NAME_TO_ASSET_NAME = {
     "Tools": "BasicTools",
     "Exosuit": "BasicExosuit",
     "Bio-Nutrient Blend": "NutrientBlend",
+    "Amenities": "BasicAmenities",
+    "Construction Kit": "BasicConstructionKit",
+    "Copper": "CopperBar"
 }
 RECIPE_ID_TO_CUSTOM_NAMES = {
     5: "Iron Ore (Oxygen)",
@@ -70,6 +82,11 @@ RECIPE_ID_TO_CUSTOM_NAMES = {
     45: "Quantum Research Data (Antimatter)",
     180: "Quantum Research Data (Quadranium)",
     189: "Quantum Research Data (Biopolyne)",
+}
+PLANET_TIER_MAT_IDS = {
+    2: 90,  # Pressure sealant kit
+    3: 120, # Composite shielding
+    4: 121, # Nanoweave shielding
 }
 
 EPSILON = 1e-3
@@ -278,6 +295,7 @@ def render_mat_with_icon(mat_id, link=False, name_override=None):
         mat_name = name_override
     else:
         mat_name = get_material_name(mat_id)
+
     asset_name = MAT_NAME_TO_ASSET_NAME.get(mat_name, "".join(mat_name.split()))
     if link == True:
         mat_text = f'<a href="https://g2.galactictycoons.com/exchange/{get_mat_id(mat_name)}">{mat_name}</a"'
@@ -501,3 +519,58 @@ def prepare_wishlist_additems_body(data):
             "mats": mats
         })
     return result
+
+
+def is_production_building(building_type_id):
+    return bool(GAME_DATA["buildings"][building_type_id-1]["recipesIds"])
+
+
+def get_building_cost_vec(building_data, planet_tier=1):
+    """See https://wiki.galactictycoons.com/mechanics/buildings for formula."""
+    building_type_data = BUILDING_TYPES_DATA[building_data["building"]["type"]]
+    base = np.zeros(MAT_VECTOR_SIZE)
+    for mat_data in building_type_data["constructionMaterials"]:
+        base[mat_data["id"]] += mat_data["am"]
+    if planet_tier >= 2:
+        base[PLANET_TIER_MAT_IDS.get(planet_tier)] += building_type_data["tier"]
+
+    total = np.zeros(MAT_VECTOR_SIZE)
+    for level in range(building_data["building"]["level"]):
+        if level == 0:
+            growth = 1.0
+        elif level <= 7:
+            growth = 0.1 * level + 1.07 ** level
+        else:
+            growth = 0.7 + 1.07 ** 7 + (level - 6) ** 1.03 - 0.95 * (level - 6)
+
+        total += np.ceil(base * growth).astype(int)
+
+    return total
+
+
+def get_base_repair_cost(base_data, repair_threshold, delay=0.0):
+    if repair_threshold > 0.9 or repair_threshold < 0.0:
+        raise ValueError("Repair threshold must be between 0.0 and 0.9")
+    if delay < 0.0:
+        raise ValueError("Delay duration must be non-negative.")
+    cost = np.zeros(MAT_VECTOR_SIZE)
+    planet_id = base_data["planetId"]
+    planet_tier = PLANETS_DATA[planet_id]["tier"]
+    for building_data in base_data["buildingSlots"]:
+        if (building_data["building"] and
+            is_production_building(building_data["building"]["type"]) and
+            building_data["building"]["cond"] <= repair_threshold):
+            cond = building_data["building"]["cond"]
+            # Potentially something wrong with this delay calculation - it doesn't match the in-game planner projection.
+            cost += np.ceil(
+                (1 - (cond - 0.025 * delay)) * get_building_cost_vec(building_data, planet_tier=planet_tier))
+    return cost
+
+
+def get_bases_repair_cost_mat(base_ids, bases_data, repair_threshold=None, delay=0.0):
+    m = np.zeros((len(base_ids), MAT_VECTOR_SIZE))
+    if repair_threshold is not None:
+        for i, base_id in enumerate(base_ids):
+            m[i] = get_base_repair_cost(
+                bases_data[base_id], repair_threshold, delay=delay)
+    return m

@@ -127,10 +127,10 @@
         }
         .content {
             background: #fff;
-            padding: 10px;
+            padding: 5px;
             border-radius: 5px;
             border: 1px solid #ccc;
-            margin: 10px 0;
+            margin: 5px 0;
         }
         .help-badge {
             display: inline-flex;
@@ -252,8 +252,8 @@
         <a href="{{ url_for('plan') }}" class="{{ 'active' if request.endpoint == 'plan' else '' }}">Plan production</a>
         <a href="{{ url_for('apikey') }}" class   ="{{ 'active' if request.endpoint == 'apikey' else '' }}">API key</a>
         <div class="msg-bar">
-            <div id="msg-success" class="msg-success"></div>
-            <div id="msg-error" class="msg-error"></div>
+        <div id="msg-success" class="msg-success"></div>
+        <div id="msg-error" class="msg-error"></div>
         </div>
     </div>
     

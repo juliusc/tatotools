@@ -88,6 +88,22 @@
     </label>
     <input type="text" class="text-input" id="max-weight-value" name="max-weight" value="" placeholder="unlimited">
 
+    <div id="repair-settings" class="content">
+        <h3>Repair settings</h3>
+            <label id="repair-threshold">Repair threshold
+                <div class="help-badge">?<div class="help-tooltip">
+                    Bring materials to repair buildings that are currently at this condition or worse. Leave blank for no repairs.
+                </div></div>
+            </label>
+            <input type="text" class="text-input" id="repair-threshold-value" name="repair-threshold" value="0.85" placeholder="No repairs">
+
+            <label id="repair-delay">Repair delay (hours)
+                <div class="help-badge">?<div class="help-tooltip">
+                    Bring extra materials assuming this many hours pass between now and executing the repair.
+                </div></div>
+            </label>
+            <input type="text" class="text-input" id="repair-delay-value" name="repair-delay" value="12" placeholder="0">
+
     <!-- <label id="count-sell-orders-text">
         <input type="checkbox" id="count-sell-orders" unchecked>
         Count 
@@ -186,9 +202,9 @@
             $(`#orders-${base_id}`).toggleClass("collapsed")
 
 
-            $(`#report-${base_id}`).append(`<div class="content" id="mats-${base_id}"><h4>Inputs</h4></div>`)
-            table = `<table id=mats-${base_id}-table><thead><tr><th>Material</th><th>At Base</th><th>Import amount</th><th>Import weight</th></tr></thead>`
-            base_data["materials"].forEach(row => {
+            $(`#report-${base_id}`).append(`<div class="content" id="import-${base_id}"><h4>Import goods</h4></div>`)
+            table = `<table id=import-${base_id}-table><thead><tr><th>Material</th><th>At Base</th><th>Import amount</th><th>Import weight</th></tr></thead>`
+            base_data["import_materials"].forEach(row => {
                 table += `<tr>`;
                 table += "<td>" + row["material"] + "</td>"
                 table += "<td>" + row["at_base"] + "</td>"
@@ -197,10 +213,26 @@
                 table += '</tr>';
             });
             table += "</tbody></table>"
-            $(`#mats-${base_id}`).append(table)
-            $(`#mats-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
-            $(`#mats-${base_id}`).each(modifyContent)
-            $(`#mats-${base_id}`).toggleClass("collapsed")
+            $(`#import-${base_id}`).append(table)
+            $(`#import-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
+            $(`#import-${base_id}`).each(modifyContent)
+            $(`#import-${base_id}`).toggleClass("collapsed")
+
+            $(`#report-${base_id}`).append(`<div class="content" id="excess-${base_id}"><h4>Excess goods</h4></div>`)
+            table = `<table id=excess-${base_id}-table><thead><tr><th>Material</th><th>Amount</th><th>Weight</th></tr></thead>`
+            base_data["excess_materials"].forEach(row => {
+                table += `<tr>`;
+                table += "<td>" + row["material"] + "</td>"
+                table += "<td>" + row["amount"] + "</td>"
+                table += "<td>" + row["weight"] + "</td>"
+                table += '</tr>';
+            });
+            table += "</tbody></table>"
+            $(`#excess-${base_id}`).append(table)
+            $(`#excess-${base_id}-table`).dataTable({searching: false, paging: false, info: false, ordering: false})
+            $(`#excess-${base_id}`).each(modifyContent)
+            $(`#excess-${base_id}`).toggleClass("collapsed")
+
 
             $(`#report-${base_id}`).append(`<div class="content" id="time-${base_id}"><h4>Production duration</h4></div>`)
             table = `<table id=time-${base_id}-table><thead><tr><th>Building</th><th>Duration</th></tr></thead>`
@@ -217,7 +249,7 @@
             $(`#time-${base_id}`).toggleClass("collapsed")
 
             $(`#report-${base_id}`).each(modifyContent)
-            $(`#report-${base_id}`).toggleClass("collapsed")
+            // $(`#report-${base_id}`).toggleClass("collapsed")
         }
     }
 
@@ -289,6 +321,9 @@
             $(this).closest('.content').toggleClass('collapsed');
         });
 
+        $(`#repair-settings`).toggleClass("collapsed")
+
+
     });
 
     $("#plan-button").click(function () {
@@ -312,6 +347,8 @@
             duration: $("#duration-value").val(),
             consumables_duration: $("#consumables-duration-value").val(),
             max_weight: $("#max-weight-value").val(),
+            repair_threshold: $("#repair-threshold-value").val(),
+            repair_delay: $("#repair-delay-value").val(),
             // include_consumables: $("#include-consumables").prop("checked"),
             // include_exchange: $("#include-exchange").prop("checked"),
             // only_outputs_sellable: $("#only-outputs-sellable").prop("checked")

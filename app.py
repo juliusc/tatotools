@@ -65,9 +65,11 @@ def compute_plan():
     consumables_duration = float(consumables_duration) / 24 if consumables_duration else None
     max_weight = request.args["max_weight"]
     max_weight = int(max_weight) if max_weight else None
+    repair_threshold = request.args["repair_threshold"]
+    repair_threshold = float(repair_threshold) if repair_threshold else None
+    repair_delay = request.args["repair_delay"]
+    repair_delay = float(repair_delay) / 24 if repair_delay else 0.0
 
-    include_consumables = True if request.args.get("include_consumables") == "true" else False
-    include_exchange = True if request.args.get("include_exchange") == "true" else False
     only_outputs_sellable = True if request.args.get("only_outputs_sellable") == "true" else False
 
     plan_orders = optimization.plan_production2(
@@ -81,14 +83,17 @@ def compute_plan():
         exchange_orders_data,
         consumables_duration=consumables_duration,
         max_weight=max_weight,
-        include_consumables=include_consumables,
-        include_exchange=include_exchange,
-        only_outputs_sellable=only_outputs_sellable)
+        only_outputs_sellable=only_outputs_sellable,
+        repair_threshold=repair_threshold,
+        repair_delay=repair_delay
+    )
 
     return optimization.prepare_report(
         base_ids,
         plan_orders,
         consumables_duration or duration,
+        repair_threshold,
+        repair_delay,
         company_data,
         bases_data,
         warehouses_data)
