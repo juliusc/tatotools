@@ -94,8 +94,7 @@ EPSILON = 1e-3
 API_BASE_URL = "https://api.g2.galactictycoons.com/public"
 
 
-DEBUG_MODE = True
-DEBUG_MODE = False
+DEBUG_MODE = os.environ.get("DEBUG") == "True"
 CACHE_FILE = "cache.json"
 if Path(CACHE_FILE).exists():
     CACHE = json.load(open(CACHE_FILE))
