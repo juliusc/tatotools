@@ -111,14 +111,14 @@
             TODO
         </div></div>
     </label> -->
-    <!-- <label id="only-outputs-sellable-text">
+    <label id="only-outputs-sellable-text">
         <input type="checkbox" id="only-outputs-sellable" unchecked>
-        Disable selling inputs
+        Only outputs are sellable.
         <div class="help-badge">?<div class="help-tooltip">
-            If checked, the algorithm only permits selling output products, which encourages the algorithm to use up existing inputs. 
-            If unchecked, the algorithm may recommend selling existing inputs.
+            If checked, only revenue from selling output items is counted.
+            This heavily encourages using up existing inputs rather than switching away.
         </div></div>
-    </label> -->
+    </label>
     <!-- <br> -->
 
 </div>
@@ -336,6 +336,7 @@
             $("#msg-error").text("Select at least one base")
             return
         } else {
+            $("#msg-success").text("")
             $("#msg-error").text("")
             $("#upload-wishlist-button").prop("disabled", true);
             $("#clear-button").prop("disabled", true);
@@ -360,6 +361,7 @@
             headers: {'Gt-Api-Key': localStorage.getItem('apiKey')},
             data: data,
             success: function(response) {
+                $("#msg-success").text("")
                 $("#msg-error").text("")
                 $('#thinking-plan').hide()
                 $('#result').show()
