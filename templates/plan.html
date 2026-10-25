@@ -180,8 +180,13 @@
         let report = localStorage.getItem("plan");
         $("#plan-output").remove();
         if (typeof report !== 'string') {
+            $("#upload-wishlist-button").prop("disabled", true);
+            $("#clear-button").prop("disabled", true);
             return;
         }
+        $("#upload-wishlist-button").prop("disabled", false);
+        $("#clear-button").prop("disabled", false);
+
         report = JSON.parse(report)
         $("body").append(`<div class="content" id="plan-output"><h2>Production Plan</h2></div>`)
         for (const [base_id, base_data] of Object.entries(report.bases)) {
@@ -381,6 +386,7 @@
 
     $("#clear-button").click(function () {
         localStorage.removeItem("plan")
+        $("#upload-wishlist-button").prop("disabled", true);
         formatReport();
     });
 
