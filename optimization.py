@@ -110,7 +110,6 @@ def plan_production2(base_ids,
                     max_weight=None,
                     repair_threshold=None,
                     repair_delay=0.0,
-                    no_inputs_sellable=True,
                     only_outputs_sellable=True,
                     no_outputs_purchaseable=True,
                     max_sellable_volume_pct=0.25,
@@ -220,7 +219,7 @@ def plan_production2(base_ids,
 
     # Heuristic rounding
     factor = (orders_var.value.max() / 1000)
-    final_orders = (np.floor(orders_var.value / factor) * factor).astype(int)
+    final_orders = (np.ceil(orders_var.value / factor) * factor).astype(int)
     return final_orders
 
 
